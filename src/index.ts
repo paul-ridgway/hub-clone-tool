@@ -41,7 +41,7 @@ function listMyRepos(): Promise<IRepo[]> {
       info(`${data.length} to clone`, "APPEND");
       return data;
     })
-    .then((data): IRepo[] => data.map((repo): IRepo => {
+    .then((data): IRepo[] => data.map((repo: any): IRepo => {
       return ({
         org: "personal", // TODO: Param?
         name: repo.name,
@@ -50,15 +50,13 @@ function listMyRepos(): Promise<IRepo[]> {
     }));
 }
 
-function listOrgRepos(org: string): Promise<IRepo[]> {
-  return octokit.paginate(octokit.repos.listForOrg, { org, type: "all" })
-    .then((data): IRepo[] => data.map((repo): IRepo => {
-      return ({
-        org,
-        name: repo.name,
-        git_url: repo.ssh_url
-      });
-    }));
+async function listOrgRepos(org: string): Promise<IRepo[]> {
+  const data = await octokit.paginate(octokit.repos.listForOrg, { org, type: "all" });
+  return data.map((repo): IRepo => ({
+    org,
+    name: repo.name,
+    git_url: repo.ssh_url
+  }));
 }
 
 function sanitizeOrg(org: string): string {
