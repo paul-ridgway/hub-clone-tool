@@ -28,6 +28,7 @@ jobs:
       - run: npm run lint
       - run: npm run compile
 #       - run: npm test
+      - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.npm_token}}
 
