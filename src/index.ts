@@ -3,7 +3,7 @@ import fs from 'fs';
 import simpleGit, { SimpleGit } from 'simple-git';
 import { Octokit } from "@octokit/rest"
 import parse from 'parse-git-config'
-import { info, error } from "./utils/logger";
+import { info, error, warn } from "./utils/logger";
 import inquirer from 'inquirer';
 import Listr from 'listr';
 
@@ -49,7 +49,16 @@ function sanitizeOrg(org: string): string {
 
 // TODO: Add git config option (code.root or something)
 function basePath(): string {
-  return process.cwd();
+  if (!config.code?.home) {
+    return process.cwd();
+  }
+
+  if (fs.existsSync(config.code.home)) {
+    return config.code.home
+  }
+
+  error("The configured code path does not exist: " + config.code.home)
+  return process.exit(-1);
 }
 
 function pathForRepo(repo: IRepo): string {
@@ -129,8 +138,7 @@ async function processOrgs(orgs: string[]): Promise<void> {
   }
 
 
-  const pwd = process.cwd();
-  const result = await checkWithUser(allRepos.length, pwd);
+  const result = await checkWithUser(allRepos.length, basePath());
   if (!result.continue) {
     info("Aborted!")
     return process.exit(0);
@@ -139,7 +147,23 @@ async function processOrgs(orgs: string[]): Promise<void> {
   await processRepos(allRepos);
 }
 
+function checkPath() {
+  if (config.code?.home) {
+    if (fs.existsSync(config.code.home)) {
+      info("Cloning to: " + config.code.home)
+    } else {
+      error("The configured code path does not exist: " + config.code.home)
+      return process.exit(-1);
+    }
+  } else {
+    warn("No directory is configured as a git global config variable (code.home).")
+    warn("Working out of the current directory: " + process.cwd())
+  }
+}
+
 async function run(): Promise<void> {
+  checkPath();
+
   const orgs = await listOrgs();
   await processOrgs(orgs);
 }
