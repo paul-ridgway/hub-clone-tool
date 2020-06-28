@@ -1,4 +1,5 @@
 # Hub Clone Tool
+![Build](https://github.com/paul-ridgway/hub-clone-tool/workflows/Build/badge.svg)
 
 ## Authentication
 Authentication is (currently) by token stored in the git settings.
