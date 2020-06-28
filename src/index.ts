@@ -33,8 +33,24 @@ function listOrgs(): Promise<string[]> {
     .listForAuthenticatedUser()
     .then(({ data }): string[] => data.map((o): string => o.login))
 }
-// // Compare: https://developer.github.com/v3/repos/#list-organization-repositories
-function listRepos(org: string): Promise<IRepo[]> {
+
+function listMyRepos(): Promise<IRepo[]> {
+  info("Fetching user repositories...", "WILL_APPEND")
+  return octokit.paginate(octokit.repos.listForAuthenticatedUser, { type: "owner" })
+    .then((data): any => {
+      info(`${data.length} to clone`, "APPEND");
+      return data;
+    })
+    .then((data): IRepo[] => data.map((repo): IRepo => {
+      return ({
+        org: "personal", // TODO: Param?
+        name: repo.name,
+        git_url: repo.ssh_url
+      });
+    }));
+}
+
+function listOrgRepos(org: string): Promise<IRepo[]> {
   return octokit.paginate(octokit.repos.listForOrg, { org, type: "all" })
     .then((data): IRepo[] => data.map((repo): IRepo => {
       return ({
@@ -128,28 +144,15 @@ async function checkWithUser(repoCount: number, dir: string): Promise<any> {
     ])
 }
 
-async function processOrgs(orgs: string[]): Promise<void> {
+async function processOrgs(orgs: string[]): Promise<IRepo[]> {
   const allRepos: IRepo[] = [];
   for await (const org of orgs) {
     info(`Fetching Repositories for ${org}...`, "WILL_APPEND")
-    const repos = await listRepos(org);
+    const repos = await listOrgRepos(org);
     info(`${repos.length} to clone`, "APPEND")
     allRepos.push(...repos);
   }
-
-  if (allRepos.length === 0) {
-    info("You have no repos!")
-    return process.exit(-1);
-  }
-
-
-  const result = await checkWithUser(allRepos.length, basePath());
-  if (!result.continue) {
-    info("Aborted!")
-    return process.exit(0);
-  }
-
-  await processRepos(allRepos);
+  return allRepos;
 }
 
 function checkPath(): void {
@@ -166,11 +169,27 @@ function checkPath(): void {
   }
 }
 
+async function checkRepos(repos: IRepo[]): Promise<void> {
+  if (repos.length === 0) {
+    info("You have no repos!")
+    return process.exit(-1);
+  }
+
+  const result = await checkWithUser(repos.length, basePath());
+  if (!result.continue) {
+    info("Aborted!")
+    return process.exit(0);
+  }
+}
+
 async function run(): Promise<void> {
   checkPath();
 
   const orgs = await listOrgs();
-  await processOrgs(orgs);
+  const repos = (await listMyRepos()).concat(await processOrgs(orgs));
+  await checkRepos(repos);
+  await processRepos(repos);
+
 }
 
 run()
