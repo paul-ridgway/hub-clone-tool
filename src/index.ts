@@ -49,7 +49,6 @@ function sanitizeOrg(org: string): string {
   return org.trim().toLowerCase();
 }
 
-// TODO: Add git config option (code.root or something)
 function basePath(): string {
   if (!config.code?.home) {
     return process.cwd();
@@ -96,7 +95,11 @@ function newCloneTask(listr: Listr, repos: IRepo[]): Listr.ListrTask {
     task: (ctx: Listr.ListrContext, task: Listr.ListrTaskWrapper): Observable<string> => new Observable<string>((observer): void => {
       const doTask = fs.existsSync(path) ? skipTarget(task) : runClone(observer, repo, path);
       doTask
-        .then((): void => listr.add(newCloneTask(listr, repos)))
+        .then((): void => {
+          if (repos.length > 0) {
+            listr.add(newCloneTask(listr, repos))
+          }
+        })
         .then((): void => observer.complete())
         .catch((err): void => { throw err })
     }),
@@ -171,6 +174,7 @@ async function run(): Promise<void> {
 }
 
 run()
-  .catch((err): void => { throw (err); });
+  .then((): void => info("Done!"))
+  .catch((err): void => { throw (err); })
 
 
