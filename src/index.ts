@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Observable, Subscriber } from "rxjs";
 import fs from 'fs';
 import simpleGit, { SimpleGit } from 'simple-git';
@@ -147,7 +149,7 @@ async function processOrgs(orgs: string[]): Promise<void> {
   await processRepos(allRepos);
 }
 
-function checkPath() {
+function checkPath(): void {
   if (config.code?.home) {
     if (fs.existsSync(config.code.home)) {
       info("Cloning to: " + config.code.home)

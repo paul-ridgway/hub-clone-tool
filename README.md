@@ -20,3 +20,7 @@ By default the tool works out of the current working directory.
 To ensure you always sync to the same folder it is advised to set a `code.home` global git config variable:
 
 `git config --global --add code.home /home/paul/Documents/Code`
+
+## Cloning
+
+Cloning is only supported via SSH (not HTTP/S) as there is no means to prompt for credentials.

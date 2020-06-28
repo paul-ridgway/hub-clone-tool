@@ -3,8 +3,13 @@
   "version": "1.0.0",
   "description": "A little helper to clone github repos",
   "main": "src/index.ts",
+  "bin": {
+    "hct": "./lib/index.js",
+    "hub-clone-tool": "./lib/index.js"
+  },
   "scripts": {
     "start": "ts-node-dev --respawn --debug --transpileOnly src/index.ts",
+    "build": "tsc -p .",
     "check": "npm run compile && npm run lint:all",
     "compile:watch": "tsc --watch --noEmit --skipLibCheck",
     "compile": "tsc --noEmit --skipLibCheck",
