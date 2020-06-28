@@ -31,13 +31,20 @@ function listOrgs(): Promise<string[]> {
   info("Listing orgs...");
   return octokit.orgs
     .listForAuthenticatedUser()
-    .then(({ data }): string[] => data.map((o): string => o.login))
+    .then(({ data }): string[] =>
+      data
+        .filter((o): boolean => o.login.includes("curve") || o.login.includes("Digital")) // TODO: Configurable org filter
+        .map((o): string => o.login)
+    )
 }
+
+import faker, { hacker } from 'faker';
 
 function listMyRepos(): Promise<IRepo[]> {
   info("Fetching user repositories...", "WILL_APPEND")
   return octokit.paginate(octokit.repos.listForAuthenticatedUser, { type: "owner" })
     .then((data): any => {
+      data = data.slice(0, 15)
       info(`${data.length} to clone`, "APPEND");
       return data;
     })
@@ -54,9 +61,9 @@ async function listOrgRepos(org: string): Promise<IRepo[]> {
   const data = await octokit.paginate(octokit.repos.listForOrg, { org, type: "all" });
   return data.map((repo): IRepo => ({
     org,
-    name: repo.name,
+    name: (faker.hacker.verb() + "-" + faker.hacker.noun()).replace(" ", "-"),
     git_url: repo.ssh_url
-  }));
+  })).slice(40, 50);
 }
 
 function sanitizeOrg(org: string): string {
