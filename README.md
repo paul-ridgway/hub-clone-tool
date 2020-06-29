@@ -3,6 +3,22 @@
 
 ![Demo](demo.gif "Demo")
 
+## Running
+
+Either run with `npx`:
+
+```
+npx hub-clone-tool
+```
+
+Or install globally:
+
+```
+npm i -g hub-clone-tool
+```
+
+And run with: `hct` or `hub-clone-tool`.
+
 ## Authentication
 Authentication is (currently) by token, stored in the git settings.
 
