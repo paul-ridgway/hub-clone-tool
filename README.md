@@ -42,3 +42,7 @@ To ensure you always sync to the same folder it is advised to set a `code.home` 
 ## Cloning
 
 Cloning is only supported via SSH (not HTTP/S) as there is no means to prompt for credentials.
+
+## TODO
+- Show cloned/skipped stats on complete
+  - option to view lists?
