@@ -8,7 +8,7 @@
     "hub-clone-tool": "./lib/index.js"
   },
   "scripts": {
-    "start": "ts-node-dev --respawn --debug --transpileOnly src/index.ts",
+    "start": "ts-node-dev --respawn --debug --transpile-only src/index.ts",
     "build": "tsc -p .",
     "check": "npm run compile && npm run lint:all",
     "compile:watch": "tsc --watch --noEmit --skipLibCheck",
