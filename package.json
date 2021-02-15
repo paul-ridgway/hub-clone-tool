@@ -2,7 +2,7 @@
   "name": "hub-clone-tool",
   "version": "1.0.5",
   "description": "A little helper to clone github repos",
-  "main": "lib/index.jsq",
+  "main": "lib/index.js",
   "bin": {
     "hct": "./lib/index.js",
     "hub-clone-tool": "./lib/index.js"
