@@ -55,7 +55,7 @@ async function listOrgRepos(org: string): Promise<IRepo[]> {
   return data.map((repo): IRepo => ({
     org,
     name: repo.name,
-    git_url: repo.ssh_url
+    git_url: repo.ssh_url!
   }));
 }
 
