@@ -2,13 +2,13 @@
   "name": "hub-clone-tool",
   "version": "1.0.5",
   "description": "A little helper to clone github repos",
-  "main": "lib/index.jsq",
+  "main": "lib/index.js",
   "bin": {
     "hct": "./lib/index.js",
     "hub-clone-tool": "./lib/index.js"
   },
   "scripts": {
-    "start": "ts-node-dev --respawn --debug --transpileOnly src/index.ts",
+    "start": "ts-node-dev --respawn --debug --transpile-only src/index.ts",
     "build": "tsc -p .",
     "check": "npm run compile && npm run lint:all",
     "compile:watch": "tsc --watch --noEmit --skipLibCheck",

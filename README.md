@@ -3,6 +3,8 @@
 
 ![Demo](demo.gif "Demo")
 
+Clones all repositories a user has access to from GitHub.
+
 ## Running
 
 Either run with `npx`:
