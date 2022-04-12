@@ -48,7 +48,7 @@
     "npm": "^8.0.0",
     "parse-git-config": "^3.0.0",
     "rxjs": "^6.6.7",
-    "simple-git": "^2.46.0"
+    "simple-git": "^3.5.0"
   },
   "devDependencies": {
     "@types/node": "^14.17.21",
