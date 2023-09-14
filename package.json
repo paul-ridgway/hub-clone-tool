@@ -45,7 +45,7 @@
     "inquirer": "^7.3.3",
     "install": "^0.13.0",
     "listr": "^0.14.3",
-    "npm": "^8.0.0",
+    "npm": "^10.1.0",
     "parse-git-config": "^3.0.0",
     "rxjs": "^6.6.7",
     "simple-git": "^3.5.0"
