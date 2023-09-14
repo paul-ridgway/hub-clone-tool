@@ -47,7 +47,8 @@ function listMyRepos(): Promise<IRepo[]> {
       return ({
         org: "personal", // TODO: Param?
         name: repo.name,
-        git_url: repo.ssh_url
+        git_url: repo.ssh_url,
+        archived: !!repo.archived,
       });
     }));
 }
@@ -58,7 +59,7 @@ async function listOrgRepos(org: string): Promise<IRepo[]> {
     org,
     name: repo.name,
     git_url: repo.ssh_url!,
-    archived: repo.archived,
+    archived: !!repo.archived,
   }));
 }
 
