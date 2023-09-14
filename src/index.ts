@@ -8,19 +8,21 @@ import parse from 'parse-git-config'
 import { info, error, warn } from "./utils/logger";
 import inquirer from 'inquirer';
 import Listr from 'listr';
+import { cpus } from "os";
 
 interface IRepo {
   org: string;
   name: string;
   git_url: string;
+  archived: boolean;
 }
 
-const concurrency = 5; // TODO: Add param
+const concurrency = cpus().length; // TODO: Add param?
 const config = parse.sync({ path: "~/.gitconfig" });
 
 if (!config.github?.apikey) {
   error("No API Key found!")
-  process.exit(-1);
+  process.exit(1);
 }
 
 const octokit = new Octokit({
@@ -55,7 +57,8 @@ async function listOrgRepos(org: string): Promise<IRepo[]> {
   return data.map((repo): IRepo => ({
     org,
     name: repo.name,
-    git_url: repo.ssh_url!
+    git_url: repo.ssh_url!,
+    archived: repo.archived,
   }));
 }
 
@@ -146,9 +149,12 @@ async function processOrgs(orgs: string[]): Promise<IRepo[]> {
   const allRepos: IRepo[] = [];
   for await (const org of orgs) {
     info(`Fetching Repositories for ${org}...`, "WILL_APPEND")
-    const repos = await listOrgRepos(org);
-    info(`${repos.length} to clone`, "APPEND")
-    allRepos.push(...repos);
+    const allRepos = await listOrgRepos(org);
+    const activeRepos = allRepos.filter((repo): boolean => !repo.archived);
+    const archCount = allRepos.length - activeRepos.length;
+    const arch = archCount > 0 ? ` (skipping ${archCount} archived)` : "";
+    info(`${activeRepos.length} to clone${arch}`, "APPEND")
+    allRepos.push(...activeRepos);
   }
   return allRepos;
 }
