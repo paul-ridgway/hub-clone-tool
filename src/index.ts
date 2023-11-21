@@ -147,7 +147,7 @@ async function checkWithUser(repoCount: number, dir: string): Promise<any> {
 }
 
 async function processOrgs(orgs: string[]): Promise<IRepo[]> {
-  const allRepos: IRepo[] = [];
+  const repos: IRepo[] = [];
   for await (const org of orgs) {
     info(`Fetching Repositories for ${org}...`, "WILL_APPEND")
     const allRepos = await listOrgRepos(org);
@@ -155,9 +155,9 @@ async function processOrgs(orgs: string[]): Promise<IRepo[]> {
     const archCount = allRepos.length - activeRepos.length;
     const arch = archCount > 0 ? ` (skipping ${archCount} archived)` : "";
     info(`${activeRepos.length} to clone${arch}`, "APPEND")
-    allRepos.push(...activeRepos);
+    repos.push(...activeRepos);
   }
-  return allRepos;
+  return repos;
 }
 
 function checkPath(): void {
