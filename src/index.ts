@@ -150,14 +150,24 @@ async function processOrgs(orgs: string[]): Promise<IRepo[]> {
   const repos: IRepo[] = [];
   for await (const org of orgs) {
     info(`Fetching Repositories for ${org}...`, "WILL_APPEND")
-    const allRepos = await listOrgRepos(org);
+    try {
+      const activeRepos = await fetchOrgRepos(org);
+      repos.push(...activeRepos);
+    } catch (err) {
+      info('Failed!', 'APPEND');
+      error(`Failed to fetch repos for ${org}: ${err}`)
+    }
+  }
+  return repos;
+}
+
+async function fetchOrgRepos(org: string): Promise<IRepo[]> {
+  const allRepos = await listOrgRepos(org);
     const activeRepos = allRepos.filter((repo): boolean => !repo.archived);
     const archCount = allRepos.length - activeRepos.length;
     const arch = archCount > 0 ? ` (skipping ${archCount} archived)` : "";
     info(`${activeRepos.length} to clone${arch}`, "APPEND")
-    repos.push(...activeRepos);
-  }
-  return repos;
+    return activeRepos;
 }
 
 function checkPath(): void {
