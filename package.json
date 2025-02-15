@@ -3,12 +3,13 @@
   "version": "1.0.13",
   "description": "A little helper to clone github repos",
   "main": "lib/index.js",
+  "type": "module",
   "bin": {
     "hct": "./lib/index.js",
     "hub-clone-tool": "./lib/index.js"
   },
   "scripts": {
-    "start": "ts-node-dev --respawn --debug --transpile-only src/index.ts",
+    "start": "npx tsx src/index.ts",
     "build": "tsc -p .",
     "check": "npm run compile && npm run lint:all",
     "compile:watch": "tsc --watch --noEmit --skipLibCheck",
@@ -36,24 +37,22 @@
   },
   "homepage": "https://github.com/paul-ridgway/hub-clone-tool#readme",
   "dependencies": {
-    "@octokit/rest": "^21.1.0",
-    "@types/inquirer": "^6.5.0",
+    "@inquirer/prompts": "^7.3.1",
+    "@octokit/rest": "^21.1.1",
+    "chalk": "^5.4.1",
+    "install": "^0.13.0",
+    "listr": "^0.14.3",
+    "parse-git-config": "^3.0.0",
+    "rxjs": "^6.3.3",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
     "@types/listr": "^0.14.9",
     "@types/parse-git-config": "^3.0.4",
     "@types/zen-observable": "^0.8.7",
-    "chalk": "^4.1.2",
-    "inquirer": "^7.3.3",
-    "install": "^0.13.0",
-    "listr": "^0.14.3",
-    "npm": "^10.1.0",
-    "parse-git-config": "^3.0.0",
-    "rxjs": "^6.6.7",
-    "simple-git": "^3.21.0"
-  },
-  "devDependencies": {
-    "@types/node": "^14.17.21",
-    "ts-node": "^8.10.2",
-    "ts-node-dev": "^1.1.8",
-    "typescript": "^3.9.10"
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5"
   }
 }

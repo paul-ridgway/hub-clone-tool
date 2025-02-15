@@ -2,13 +2,12 @@
 
 import { Observable, Subscriber } from "rxjs";
 import fs from 'fs';
-import simpleGit, { SimpleGit } from 'simple-git';
-import { Octokit } from "@octokit/rest"
+import { simpleGit, SimpleGit } from 'simple-git';
 import parse from 'parse-git-config'
-import { info, error, warn } from "./utils/logger";
-import inquirer from 'inquirer';
+import { info, error, warn } from "./utils/logger.js";
 import Listr from 'listr';
 import { cpus } from "os";
+import { confirm } from '@inquirer/prompts';
 
 interface IRepo {
   org: string;
@@ -25,36 +24,39 @@ if (!config.github?.apikey) {
   process.exit(1);
 }
 
-const octokit = new Octokit({
-  auth: config.github!.apikey,
-});
-
-function listOrgs(): Promise<string[]> {
-  info("Listing orgs...");
-  return octokit.orgs
-    .listForAuthenticatedUser()
-    .then(({ data }): string[] => data.map((o): string => o.login))
+async function OctoKit() {
+  const octo = await import("@octokit/rest");
+  return new octo.Octokit({
+    auth: config.github!.apikey,
+  });
 }
 
-function listMyRepos(): Promise<IRepo[]> {
+async function listOrgs(): Promise<string[]> {
+  info("Listing orgs...");
+  const { data } = await (await OctoKit()).orgs
+    .listForAuthenticatedUser();
+  return data.map((o): string => o.login);
+}
+
+async function listMyRepos(): Promise<IRepo[]> {
   info("Fetching user repositories...", "WILL_APPEND")
-  return octokit.paginate(octokit.repos.listForAuthenticatedUser, { type: "owner" })
-    .then((data): any => {
-      info(`${data.length} to clone`, "APPEND");
-      return data;
-    })
-    .then((data): IRepo[] => data.map((repo: any): IRepo => {
-      return ({
-        org: "personal", // TODO: Param?
-        name: repo.name,
-        git_url: repo.ssh_url,
-        archived: !!repo.archived,
-      });
-    }));
+  const octo = await OctoKit();
+  const data = await octo.paginate(octo.repos.listForAuthenticatedUser, { type: "owner" });
+  info(`${data.length} to clone`, "APPEND");
+  const data_1 = data;
+  return data_1.map((repo: any): IRepo => {
+    return ({
+      org: "personal", // TODO: Param?
+      name: repo.name,
+      git_url: repo.ssh_url,
+      archived: !!repo.archived,
+    });
+  });
 }
 
 async function listOrgRepos(org: string): Promise<IRepo[]> {
-  const data = await octokit.paginate(octokit.repos.listForOrg, { org, type: "all" });
+  const octo = await OctoKit();
+  const data = await octo.paginate(octo.repos.listForOrg, { org, type: "all" });
   return data.map((repo): IRepo => ({
     org,
     name: repo.name,
@@ -136,14 +138,11 @@ async function processRepos(repos: IRepo[]): Promise<void> {
 }
 
 async function checkWithUser(repoCount: number, dir: string): Promise<any> {
-  return await inquirer
-    .prompt([
+  return await confirm(
       {
-        type: 'confirm',
         message: `Are you sure you want to continue and clone ${repoCount} repositories into ${dir}: `,
-        name: 'continue',
       }
-    ])
+    )
 }
 
 async function processOrgs(orgs: string[]): Promise<IRepo[]> {
@@ -191,7 +190,7 @@ async function checkRepos(repos: IRepo[]): Promise<void> {
   }
 
   const result = await checkWithUser(repos.length, basePath());
-  if (!result.continue) {
+  if (!result) {
     info("Aborted!")
     return process.exit(0);
   }
