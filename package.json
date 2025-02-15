@@ -1,6 +1,6 @@
 {
   "name": "hub-clone-tool",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "A little helper to clone github repos",
   "main": "lib/index.js",
   "type": "module",
