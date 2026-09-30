@@ -11,8 +11,8 @@ import (
 )
 
 // progress renders a block of live status lines, one per slot, each with a
-// spinner until it is settled or finished. The most recently finished lines
-// are kept above the slots. The block is fitted to the terminal height, as it
+// spinner until it is settled or finished, repainted on each spinner tick. The most recently finished lines
+// are kept beneath the slots, and an optional footer anchored to the bottom of the terminal. The block is fitted to the terminal height, as it
 // can only be redrawn in place while it is all on screen. Without a TTY it
 // only prints the settled and finished lines.
 type slot struct {
@@ -33,6 +33,12 @@ type progress struct {
 	stop   chan struct{}
 	// rows reports the terminal height; nil means query the terminal.
 	rows func() int
+	// footer, if set, supplies a status line anchored to the bottom row of
+	// the terminal, outside the scrolling region.
+	footer func() string
+	// anchored is the terminal height the footer's row was reserved for.
+	anchored int
+	closed   bool
 }
 
 const maxRecent = 10
@@ -57,10 +63,12 @@ func (p *progress) spin() {
 			return
 		case <-ticker.C:
 			p.mu.Lock()
-			p.frame = (p.frame + 1) % len(spinnerFrames)
-			if p.drawn > 0 {
-				p.redraw()
+			if p.closed {
+				p.mu.Unlock()
+				return
 			}
+			p.frame = (p.frame + 1) % len(spinnerFrames)
+			p.redraw()
 			p.mu.Unlock()
 		}
 	}
@@ -71,8 +79,32 @@ func (p *progress) close() {
 	if p.tty {
 		p.mu.Lock()
 		defer p.mu.Unlock()
+		p.closed = true
+		p.redraw()
+		if p.anchored > 0 {
+			// Clear the footer and give its row back to the scrolling region.
+			fmt.Printf("\x1b7\x1b[r\x1b[%d;1H\x1b[2K\x1b8", p.anchored)
+			p.anchored = 0
+		}
 		fmt.Print("\x1b[?7h\x1b[?25h")
 	}
+}
+
+// anchor reserves the bottom row of the terminal for the footer by shrinking
+// the scrolling region, redoing it if the terminal has been resized.
+func (p *progress) anchor(b *strings.Builder) int {
+	h := p.height()
+	if h == p.anchored {
+		return h
+	}
+	if p.anchored == 0 {
+		// Make room first, in case the cursor is already on the bottom row.
+		fmt.Fprintf(b, "\n\x1b7\x1b[1;%dr\x1b8\x1b[1A", h-1)
+	} else {
+		fmt.Fprintf(b, "\x1b7\x1b[1;%dr\x1b8", h-1)
+	}
+	p.anchored = h
+	return h
 }
 
 // set shows a spinner line for the slot, with an optional detail beneath it.
@@ -83,7 +115,6 @@ func (p *progress) set(i int, line, detail string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.slots[i] = slot{text: line, detail: detail, active: true}
-	p.redraw()
 }
 
 // settle stops the slot's spinner, leaving the line in place with the given mark.
@@ -95,7 +126,6 @@ func (p *progress) settle(i int, mark, line string) {
 		return
 	}
 	p.slots[i] = slot{text: line, mark: mark, active: true}
-	p.redraw()
 }
 
 // finish frees the slot and adds line to the recently finished list.
@@ -111,7 +141,6 @@ func (p *progress) finish(i int, line string) {
 	if len(p.recent) > maxRecent {
 		p.recent = p.recent[1:]
 	}
-	p.redraw()
 }
 
 func (p *progress) height() int {
@@ -124,11 +153,15 @@ func (p *progress) height() int {
 	return 24
 }
 
-// layout returns the lines to draw: as many recent lines as fit above the
-// active slots. Details move onto the slot's own line if the terminal is too
+// layout returns the lines to draw: the active slots, then as many recent
+// lines as fit beneath them. Details move onto the slot's own line if the terminal is too
 // short for two lines each, and slots that still don't fit are summarised.
 func (p *progress) layout() []string {
-	rows := max(p.height()-1, 2) // the cursor sits on the line below the block
+	rows := p.height() - 1 // the cursor sits on the line below the block
+	if p.footer != nil {
+		rows--
+	}
+	rows = max(rows, 2)
 
 	var active []slot
 	needed := 0
@@ -164,20 +197,39 @@ func (p *progress) layout() []string {
 		lines = append(lines[:rows-1], paint(os.Stdout, dim, fmt.Sprintf("  … and %d more", hidden)))
 	}
 
-	recent := p.recent[len(p.recent)-min(len(p.recent), rows-len(lines)):]
-	return append(append([]string{}, recent...), lines...)
+	// Finished lines flow down from beneath the active slots, newest first.
+	for i := len(p.recent) - 1; i >= 0 && len(lines) < rows; i-- {
+		lines = append(lines, p.recent[i])
+	}
+	return lines
 }
 
+// redraw repaints the block in place. It is called on each spinner tick, so
+// updates between ticks are batched, and lines are overwritten rather than
+// cleared first to avoid flicker.
 func (p *progress) redraw() {
 	var b strings.Builder
+	b.WriteString("\x1b[?2026h") // synchronised update, where supported
+	bottom := 0
+	if p.footer != nil {
+		bottom = p.anchor(&b)
+	}
 	if p.drawn > 0 {
 		fmt.Fprintf(&b, "\x1b[%dA", p.drawn)
 	}
-	b.WriteString("\r\x1b[J")
+	b.WriteString("\r")
 	lines := p.layout()
 	for _, line := range lines {
-		b.WriteString(line + "\n")
+		b.WriteString(line + "\x1b[K\n")
+	}
+	if stale := p.drawn - len(lines); stale > 0 {
+		b.WriteString(strings.Repeat("\x1b[K\n", stale))
+		fmt.Fprintf(&b, "\x1b[%dA", stale)
 	}
 	p.drawn = len(lines)
+	if p.footer != nil {
+		fmt.Fprintf(&b, "\x1b7\x1b[%d;1H%s\x1b[K\x1b8", bottom, p.footer())
+	}
+	b.WriteString("\x1b[?2026l")
 	fmt.Print(b.String())
 }

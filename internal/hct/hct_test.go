@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestNextLink(t *testing.T) {
@@ -138,6 +140,7 @@ func TestProgressKeepsLastFinished(t *testing.T) {
 	if len(p.recent) != maxRecent || p.recent[0] != "repo 5" || p.recent[maxRecent-1] != "repo 14" {
 		t.Errorf("recent = %v", p.recent)
 	}
+	p.redraw()
 	if p.drawn != maxRecent {
 		t.Errorf("drawn = %d, want %d", p.drawn, maxRecent)
 	}
@@ -154,18 +157,44 @@ func TestProgressLayoutFitsTerminal(t *testing.T) {
 	tests := []struct {
 		rows      int
 		wantLines int
-		wantFirst string
+		wantLast  string
 	}{
-		{rows: 30, wantLines: 11, wantFirst: "a"},                        // everything, two lines per slot
-		{rows: 10, wantLines: 9, wantFirst: "c"},                         // drops older recent lines
-		{rows: 6, wantLines: 5, wantFirst: "c"},                          // details move inline
-		{rows: 4, wantLines: 3, wantFirst: "⠋ repo 0 Receiving objects"}, // slots summarised
+		{rows: 30, wantLines: 11, wantLast: "a"},            // everything, two lines per slot
+		{rows: 10, wantLines: 9, wantLast: "c"},             // drops older recent lines
+		{rows: 6, wantLines: 5, wantLast: "c"},              // details move inline
+		{rows: 4, wantLines: 3, wantLast: "  … and 2 more"}, // slots summarised
 	}
 	for _, tt := range tests {
 		rows = tt.rows
 		lines := p.layout()
-		if len(lines) != tt.wantLines || lines[0] != tt.wantFirst {
-			t.Errorf("rows=%d: got %d lines starting %q, want %d starting %q\n%q", tt.rows, len(lines), lines[0], tt.wantLines, tt.wantFirst, lines)
+		if len(lines) != tt.wantLines || lines[0][:len("⠋ repo 0")] != "⠋ repo 0" || lines[len(lines)-1] != tt.wantLast {
+			t.Errorf("rows=%d: got %d lines ending %q, want %d ending %q\n%q", tt.rows, len(lines), lines[len(lines)-1], tt.wantLines, tt.wantLast, lines)
 		}
+	}
+}
+
+func TestStatusBar(t *testing.T) {
+	tl := &tally{total: 10, started: time.Now()}
+	tl.update(func(s *stats) {
+		s.cloned, s.skipped = 3, 1
+		s.failures = []string{"a / b: boom"}
+	})
+	got := tl.statusBar()
+	want := strings.Repeat("█", 15) + strings.Repeat("░", 15) + " 5/10 (50%) · 3 cloned · 1 skipped · 1 failed · 0s"
+	if got != want {
+		t.Errorf("statusBar = %q, want %q", got, want)
+	}
+}
+
+func TestProgressFooterReservesRow(t *testing.T) {
+	p := &progress{tty: true, slots: make([]slot, 1), rows: func() int { return 5 }, footer: func() string { return "footer" }}
+	p.slots[0] = slot{text: "repo", detail: "Receiving", active: true}
+	p.recent = []string{"a", "b", "c"}
+	if lines := p.layout(); len(lines) != 3 || lines[2] != "c" {
+		t.Errorf("layout = %q", lines)
+	}
+	p.redraw()
+	if p.anchored != 5 {
+		t.Errorf("anchored = %d, want 5", p.anchored)
 	}
 }

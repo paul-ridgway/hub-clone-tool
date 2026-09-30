@@ -5,24 +5,52 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
-)
-
-type result int
-
-const (
-	cloned result = iota
-	skipped
-	failed
+	"syscall"
+	"time"
 )
 
 type stats struct {
 	cloned, skipped int
 	// failures holds one "org / name: reason" line per failed clone.
 	failures []string
+}
+
+// tally tracks overall progress across the clone workers.
+type tally struct {
+	mu      sync.Mutex
+	total   int
+	started time.Time
+	stats
+}
+
+func (t *tally) update(f func(*stats)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	f(&t.stats)
+}
+
+const barWidth = 30
+
+// statusBar renders the overall progress line anchored to the bottom of the terminal.
+func (t *tally) statusBar() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	done := t.cloned + t.skipped + len(t.failures)
+	filled := 0
+	if t.total > 0 {
+		filled = barWidth * done / t.total
+	}
+	bar := paint(os.Stdout, greenBright, strings.Repeat("█", filled)) + paint(os.Stdout, dim, strings.Repeat("░", barWidth-filled))
+	line := fmt.Sprintf("%s %d/%d (%d%%) · %d cloned · %d skipped", bar, done, t.total, 100*done/max(t.total, 1), t.cloned, t.skipped)
+	if n := len(t.failures); n > 0 {
+		line += " · " + paint(os.Stdout, redBright, fmt.Sprintf("%d failed", n))
+	}
+	return line + " · " + time.Since(t.started).Round(time.Second).String()
 }
 
 // scanProgress splits git's output on both \n and \r, as progress updates are
@@ -40,6 +68,9 @@ func scanProgress(data []byte, atEOF bool) (int, []byte, error) {
 func runClone(ctx context.Context, r repo, path string, update func(string)) error {
 	cmd := exec.CommandContext(ctx, "git", "clone", "--progress", r.gitURL, path)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	// Interrupt rather than kill, so git removes its partial clone.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = 5 * time.Second
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return err
@@ -70,75 +101,60 @@ func runClone(ctx context.Context, r repo, path string, update func(string)) err
 	return nil
 }
 
-func cloneRepo(ctx context.Context, p *progress, slot int, base string, r repo) (result, string) {
+func cloneRepo(ctx context.Context, p *progress, t *tally, slot int, base string, r repo) {
 	label := r.org + " / " + r.name
 	path := pathForRepo(base, r)
 
 	if _, err := os.Stat(path); err == nil {
+		t.update(func(s *stats) { s.skipped++ })
 		p.finish(slot, paint(os.Stdout, yellowBright, "↓ ")+label+" [skipped: target exists]")
-		return skipped, ""
+		return
 	}
 
 	p.set(slot, label, "Starting...")
 	err := runClone(ctx, r, path, func(line string) {
 		p.set(slot, label, line)
 	})
+	if ctx.Err() != nil {
+		p.finish(slot, paint(os.Stdout, dim, "– "+label+" [aborted]"))
+		return
+	}
 	if err != nil {
 		failure := label + ": " + err.Error()
+		t.update(func(s *stats) { s.failures = append(s.failures, failure) })
 		p.finish(slot, paint(os.Stdout, redBright, "✖ ")+failure)
-		return failed, failure
+		return
 	}
+	t.update(func(s *stats) { s.cloned++ })
 	p.finish(slot, paint(os.Stdout, greenBright, "✔ ")+label)
-	return cloned, ""
 }
 
 func processRepos(ctx context.Context, base string, repos []repo, workers int) stats {
+	t := &tally{total: len(repos), started: time.Now()}
 	p := newProgress(workers)
+	p.footer = t.statusBar
 	defer p.close()
 
 	queue := make(chan repo)
-	type outcome struct {
-		res     result
-		failure string
-	}
-	results := make(chan outcome)
-
 	var wg sync.WaitGroup
 	for slot := 0; slot < workers; slot++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for r := range queue {
-				res, failure := cloneRepo(ctx, p, slot, base, r)
-				results <- outcome{res, failure}
+				cloneRepo(ctx, p, t, slot, base, r)
 			}
 		}()
 	}
-	go func() {
-		defer close(queue)
-		for _, r := range repos {
-			select {
-			case queue <- r:
-			case <-ctx.Done():
-				return
-			}
+	for _, r := range repos {
+		select {
+		case queue <- r:
+			continue
+		case <-ctx.Done():
 		}
-	}()
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	var s stats
-	for o := range results {
-		switch o.res {
-		case cloned:
-			s.cloned++
-		case skipped:
-			s.skipped++
-		case failed:
-			s.failures = append(s.failures, o.failure)
-		}
+		break
 	}
-	return s
+	close(queue)
+	wg.Wait()
+	return t.stats
 }
