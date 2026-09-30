@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -26,6 +28,66 @@ type tally struct {
 	total   int
 	started time.Time
 	stats
+	// active holds the transfer state of each worker's current clone, and
+	// finished the totals of the clones that are no longer running.
+	active   []transfer
+	finished transfer
+}
+
+// transfer is what git has reported receiving for a clone.
+type transfer struct {
+	objects int
+	bytes   float64
+	rate    float64 // bytes per second; only meaningful while receiving
+}
+
+// receiving matches git's progress, e.g.
+// "Receiving objects:  21% (111/517), 16.87 MiB | 5.22 MiB/s".
+var receiving = regexp.MustCompile(`^Receiving objects:\s+\d+% \((\d+)/\d+\)(?:, ([\d.]+) (\w+) \| ([\d.]+) (\w+)/s)?`)
+
+var byteUnits = map[string]float64{"bytes": 1, "KiB": 1 << 10, "MiB": 1 << 20, "GiB": 1 << 30, "TiB": 1 << 40}
+
+func parseSize(value, unit string) float64 {
+	n, _ := strconv.ParseFloat(value, 64)
+	return n * byteUnits[unit]
+}
+
+func formatSize(n float64) string {
+	for _, unit := range []string{"GiB", "MiB", "KiB"} {
+		if size := byteUnits[unit]; n >= size {
+			return fmt.Sprintf("%.1f %s", n/size, unit)
+		}
+	}
+	return fmt.Sprintf("%.0f B", n)
+}
+
+// observe records the transfer progress from a line of git's output.
+func (t *tally) observe(slot int, line string) {
+	m := receiving.FindStringSubmatch(line)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	tr := &t.active[slot]
+	if m == nil {
+		tr.rate = 0 // no longer receiving
+		return
+	}
+	tr.objects, _ = strconv.Atoi(m[1])
+	if m[2] != "" {
+		tr.bytes = parseSize(m[2], m[3])
+		tr.rate = parseSize(m[4], m[5])
+	}
+	if strings.HasSuffix(line, "done.") {
+		tr.rate = 0
+	}
+}
+
+// release folds a worker's finished clone into the totals.
+func (t *tally) release(slot int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.finished.objects += t.active[slot].objects
+	t.finished.bytes += t.active[slot].bytes
+	t.active[slot] = transfer{}
 }
 
 func (t *tally) update(f func(*stats)) {
@@ -50,6 +112,13 @@ func (t *tally) statusBar() string {
 	if n := len(t.failures); n > 0 {
 		line += " · " + paint(os.Stdout, redBright, fmt.Sprintf("%d failed", n))
 	}
+	sum := t.finished
+	for _, tr := range t.active {
+		sum.objects += tr.objects
+		sum.bytes += tr.bytes
+		sum.rate += tr.rate
+	}
+	line += fmt.Sprintf(" · %d objects · %s · %s/s", sum.objects, formatSize(sum.bytes), formatSize(sum.rate))
 	return line + " · " + time.Since(t.started).Round(time.Second).String()
 }
 
@@ -113,8 +182,10 @@ func cloneRepo(ctx context.Context, p *progress, t *tally, slot int, base string
 
 	p.set(slot, label, "Starting...")
 	err := runClone(ctx, r, path, func(line string) {
+		t.observe(slot, line)
 		p.set(slot, label, line)
 	})
+	t.release(slot)
 	if ctx.Err() != nil {
 		p.finish(slot, paint(os.Stdout, dim, "– "+label+" [aborted]"))
 		return
@@ -130,7 +201,7 @@ func cloneRepo(ctx context.Context, p *progress, t *tally, slot int, base string
 }
 
 func processRepos(ctx context.Context, base string, repos []repo, workers int) stats {
-	t := &tally{total: len(repos), started: time.Now()}
+	t := &tally{total: len(repos), started: time.Now(), active: make([]transfer, workers)}
 	p := newProgress(workers)
 	p.footer = t.statusBar
 	defer p.close()

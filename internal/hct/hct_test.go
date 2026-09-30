@@ -180,7 +180,7 @@ func TestStatusBar(t *testing.T) {
 		s.failures = []string{"a / b: boom"}
 	})
 	got := tl.statusBar()
-	want := strings.Repeat("█", 15) + strings.Repeat("░", 15) + " 5/10 (50%) · 3 cloned · 1 skipped · 1 failed · 0s"
+	want := strings.Repeat("█", 15) + strings.Repeat("░", 15) + " 5/10 (50%) · 3 cloned · 1 skipped · 1 failed · 0 objects · 0 B · 0 B/s · 0s"
 	if got != want {
 		t.Errorf("statusBar = %q, want %q", got, want)
 	}
@@ -196,5 +196,25 @@ func TestProgressFooterReservesRow(t *testing.T) {
 	p.redraw()
 	if p.anchored != 5 {
 		t.Errorf("anchored = %d, want 5", p.anchored)
+	}
+}
+
+func TestTallyTransfer(t *testing.T) {
+	tl := &tally{total: 3, started: time.Now(), active: make([]transfer, 2)}
+	tl.observe(0, "Receiving objects:  21% (111/517), 16.87 MiB | 5.22 MiB/s")
+	tl.observe(1, "Receiving objects: 100% (10/10), 2.00 KiB | 1.00 MiB/s, done.")
+	tl.release(1)
+	tl.observe(1, "Receiving objects:  50% (5/10)")
+	tl.observe(1, "Receiving objects:  60% (6/10), 512.00 KiB | 256.00 KiB/s")
+
+	got := tl.statusBar()
+	if want := "· 127 objects · 17.4 MiB · 5.5 MiB/s ·"; !strings.Contains(got, want) {
+		t.Errorf("statusBar = %q, want it to contain %q", got, want)
+	}
+
+	tl.observe(0, "Resolving deltas: 10% (1/10)")
+	tl.observe(1, "Resolving deltas: 10% (1/10)")
+	if got := tl.statusBar(); !strings.Contains(got, "· 0 B/s ·") {
+		t.Errorf("statusBar = %q, want no bandwidth once receiving has finished", got)
 	}
 }
