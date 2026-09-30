@@ -1,38 +1,39 @@
 name: Release
 
+# Pushing a vX.Y.Z tag publishes that version as a Go module. This workflow
+# tests it, asks the Go module proxy to index it, and creates a GitHub release
+# with prebuilt binaries.
 on:
-  release:
-    types: [created]
+  push:
+    tags: [ 'v*' ]
 
 permissions:
   contents: write
 
 jobs:
-  binaries:
+  release:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - { goos: linux, goarch: amd64 }
-          - { goos: linux, goarch: arm64 }
-          - { goos: darwin, goarch: amd64 }
-          - { goos: darwin, goarch: arm64 }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - run: go vet ./...
       - run: go test ./...
-      - name: Build
+      - name: Build binaries
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          mkdir -p dist
-          go build -trimpath -ldflags="-s -w" -o dist/hub-clone-tool .
-          tar -C dist -czf "hub-clone-tool_${GOOS}_${GOARCH}.tar.gz" hub-clone-tool
-      - name: Upload
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            export GOOS="${target%/*}" GOARCH="${target#*/}"
+            out="dist/hub-clone-tool_${GOOS}_${GOARCH}"
+            go build -trimpath -ldflags="-s -w" -o "$out/hub-clone-tool" .
+            go build -trimpath -ldflags="-s -w" -o "$out/hct" ./cmd/hct
+            tar -C "$out" -czf "$out.tar.gz" hub-clone-tool hct
+          done
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" hub-clone-tool_*.tar.gz
+        run: gh release create "$GITHUB_REF_NAME" dist/*.tar.gz --generate-notes --verify-tag
+      - name: Index on the Go module proxy
+        run: curl -fsS "https://proxy.golang.org/github.com/paul-ridgway/hub-clone-tool/@v/${GITHUB_REF_NAME}.info"

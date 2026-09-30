@@ -1,5 +1,6 @@
 # Hub Clone Tool
 ![Build](https://github.com/paul-ridgway/hub-clone-tool/workflows/Build/badge.svg)
+[![Go Reference](https://pkg.go.dev/badge/github.com/paul-ridgway/hub-clone-tool.svg)](https://pkg.go.dev/github.com/paul-ridgway/hub-clone-tool)
 
 ![Demo](demo.gif "Demo")
 
@@ -7,7 +8,7 @@ Clones all repositories a user has access to from GitHub.
 
 ## Running
 
-Install with Go (1.22+):
+Install with [Go](https://go.dev/dl/):
 
 ```
 go install github.com/paul-ridgway/hub-clone-tool@latest
@@ -23,6 +24,8 @@ Alternatively, download a prebuilt binary from the [releases page](https://githu
 
 `git` must be available on your `PATH`.
 
+> Versions up to 1.0.14 were published to npm as `hub-clone-tool`. The npm package is no longer updated; uninstall it with `npm un -g hub-clone-tool`.
+
 ## Development
 
 ```
@@ -32,6 +35,16 @@ go run .             # run from source
 go test ./...        # run the tests
 ./scripts/local-install.sh
 ```
+
+## Releasing
+
+The tool is published as a Go module, so a release is just a `vX.Y.Z` git tag on `main`:
+
+```
+./scripts/release.sh v1.2.3
+```
+
+This runs the tests, then tags and pushes. The Release workflow then creates a GitHub release with prebuilt binaries and asks the Go module proxy to index the version, after which `go install ...@latest` and [pkg.go.dev](https://pkg.go.dev/github.com/paul-ridgway/hub-clone-tool) pick it up.
 
 ## Authentication
 Authentication is (currently) by token, stored in the git settings.
