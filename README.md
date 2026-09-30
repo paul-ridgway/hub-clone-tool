@@ -27,6 +27,7 @@ Alternatively, download a prebuilt binary from the [releases page](https://githu
 
 ```
 ./scripts/build.sh   # build into ./bin, then run ./bin/hct
+./scripts/test-run.sh  # build and run against a temp dir, removed afterwards
 go run .             # run from source
 go test ./...        # run the tests
 ./scripts/local-install.sh
