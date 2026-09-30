@@ -1,5 +1,6 @@
 #!/bin/bash
-# Publishes a new version of the Go module by tagging main and pushing the tag.
+# Publishes a new version by creating a GitHub release (and its tag) from main.
+# The Release workflow then does the rest.
 # Usage: ./scripts/release.sh v1.2.3
 set -e
 cd "$(dirname "$0")/.."
@@ -17,5 +18,5 @@ fi
 git pull --ff-only
 go vet ./...
 go test ./...
-git tag -a "$version" -m "$version"
-git push origin main "$version"
+git push origin main
+gh release create "$version" --target main --generate-notes

@@ -38,13 +38,15 @@ go test ./...        # run the tests
 
 ## Releasing
 
-The tool is published as a Go module, so a release is just a `vX.Y.Z` git tag on `main`:
+The tool is published as a Go module, so a version is published by creating a GitHub release from `main` with a new `vX.Y.Z` tag (the `v` prefix is required). Either create it on the [releases page](https://github.com/paul-ridgway/hub-clone-tool/releases/new), or run:
 
 ```
 ./scripts/release.sh v1.2.3
 ```
 
-This runs the tests, then tags and pushes. The Release workflow then creates a GitHub release with prebuilt binaries and asks the Go module proxy to index the version, after which `go install ...@latest` and [pkg.go.dev](https://pkg.go.dev/github.com/paul-ridgway/hub-clone-tool) pick it up.
+which runs the tests, pushes `main` and creates the release with generated notes.
+
+The Release workflow then attaches prebuilt binaries to the release and asks the Go module proxy to index the version, after which `go install ...@latest` and [pkg.go.dev](https://pkg.go.dev/github.com/paul-ridgway/hub-clone-tool) pick it up.
 
 ## Authentication
 Authentication is (currently) by token, stored in the git settings.
