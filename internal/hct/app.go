@@ -142,7 +142,7 @@ func fetchRepos(ctx context.Context, c *client, orgs []string) ([]repo, error) {
 	p := newProgress(len(labels))
 	defer p.close()
 	for i, label := range labels {
-		p.set(i, label+": waiting...")
+		p.set(i, label+": waiting...", "")
 	}
 
 	sem := make(chan struct{}, fetchConcurrency)
@@ -154,9 +154,9 @@ func fetchRepos(ctx context.Context, c *client, orgs []string) ([]repo, error) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			p.set(i, label+": fetching repositories...")
+			p.set(i, label+": fetching repositories...", "")
 			onPage := func(n int) {
-				p.set(i, fmt.Sprintf("%s: fetching repositories... %d", label, n))
+				p.set(i, fmt.Sprintf("%s: fetching repositories... %d", label, n), "")
 			}
 			var all []repo
 			var err error

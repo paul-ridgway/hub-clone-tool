@@ -142,3 +142,30 @@ func TestProgressKeepsLastFinished(t *testing.T) {
 		t.Errorf("drawn = %d, want %d", p.drawn, maxRecent)
 	}
 }
+
+func TestProgressLayoutFitsTerminal(t *testing.T) {
+	rows := 0
+	p := &progress{tty: true, slots: make([]slot, 4), rows: func() int { return rows }}
+	for i := range p.slots {
+		p.slots[i] = slot{text: fmt.Sprintf("repo %d", i), detail: "Receiving objects", active: true}
+	}
+	p.recent = []string{"a", "b", "c"}
+
+	tests := []struct {
+		rows      int
+		wantLines int
+		wantFirst string
+	}{
+		{rows: 30, wantLines: 11, wantFirst: "a"},                        // everything, two lines per slot
+		{rows: 10, wantLines: 9, wantFirst: "c"},                         // drops older recent lines
+		{rows: 6, wantLines: 5, wantFirst: "c"},                          // details move inline
+		{rows: 4, wantLines: 3, wantFirst: "⠋ repo 0 Receiving objects"}, // slots summarised
+	}
+	for _, tt := range tests {
+		rows = tt.rows
+		lines := p.layout()
+		if len(lines) != tt.wantLines || lines[0] != tt.wantFirst {
+			t.Errorf("rows=%d: got %d lines starting %q, want %d starting %q\n%q", tt.rows, len(lines), lines[0], tt.wantLines, tt.wantFirst, lines)
+		}
+	}
+}

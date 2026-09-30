@@ -7,6 +7,7 @@ import (
 
 const (
 	reset        = "\x1b[0m"
+	dim          = "\x1b[2m"
 	inverse      = "\x1b[7m"
 	black        = "\x1b[30m"
 	redBright    = "\x1b[91m"

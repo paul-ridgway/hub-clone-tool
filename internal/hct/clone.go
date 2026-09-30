@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -80,10 +79,9 @@ func cloneRepo(ctx context.Context, p *progress, slot int, base string, r repo) 
 		return skipped, ""
 	}
 
-	title := fmt.Sprintf("Cloning from %s into %s...", label, path)
-	p.set(slot, title)
+	p.set(slot, label, "Starting...")
 	err := runClone(ctx, r, path, func(line string) {
-		p.set(slot, title+" "+line)
+		p.set(slot, label, line)
 	})
 	if err != nil {
 		failure := label + ": " + err.Error()
